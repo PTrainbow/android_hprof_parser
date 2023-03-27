@@ -1,5 +1,6 @@
 use std::cell::Cell;
 use std::collections::HashMap;
+use std::error;
 use std::fs::File;
 use memmap::Mmap;
 use crate::hprof_parser::snapshot::{IndexOutOfBoundsError, Snapshot};
@@ -53,9 +54,16 @@ impl<'hp: 'hr, 'hr> HprofParser<'hp> {
         let parser = &HprofParser {
             snapshot
         };
-        let _ = parser.parse_header();
+        let header = parser.parse_header();
+        match header {
+            Err(err) =>{
+                println!("{}", err);
+            }
+            Ok(hprof_header) => {
+                println!("hrpof version = {}", hprof_header.version);
+            }
+        }
         let _ = parser.parse_record(&mut result);
-        print!("{}", result.string_map.len());
     }
 
     /// header format
@@ -76,7 +84,7 @@ impl<'hp: 'hr, 'hr> HprofParser<'hp> {
 
     /// record format
     /// 1 byte(tag) | 4 byte(ts) | 4 byte(length) | length byte(real content) |
-    fn parse_record(&self, result: &mut HprofResult<'hr>) -> Result<bool, IndexOutOfBoundsError> {
+    fn parse_record(&self, result: &mut HprofResult<'hr>) -> Result<bool, Box<dyn error::Error>> {
         let snapshot = &self.snapshot;
         while snapshot.available() {
             // read tag
@@ -88,33 +96,75 @@ impl<'hp: 'hr, 'hr> HprofParser<'hp> {
             // read content by tag
             match tag {
                 constant::TAG_STRING => {
-                    let record = parser::load_string(snapshot, length)?;
-                    result.string_map.insert(record.id, record.content);
+                    println!("tag string start = {}", snapshot.current_position.get());
+                    match parser::load_string(snapshot, length) {
+                        Err(err) =>{
+                            // TODO
+                            println!("{}", err);
+                            break;
+                        }
+                        Ok(record) => {
+                            result.string_map.insert(record.id, record.content);
+                        }
+                    }
+                    println!("tag string end = {}", snapshot.current_position.get());
                 }
                 constant::TAG_LOAD_CLASS => {
-                    let record = parser::load_class(snapshot, &result.string_map)?;
-                    result.class_map_by_id.insert(record.class_id, record.name);
-                    result.class_map_by_serial.insert(record.serial_id, record.name);
+                    println!("tag load class start = {}", snapshot.current_position.get());
+                    match parser::load_class(snapshot, &result.string_map) {
+                        Err(err) =>{
+                            // TODO
+                            println!("{}", err);
+                            break;
+                        }
+                        Ok(record) => {
+                            result.class_map_by_id.insert(record.class_id, record.name);
+                            result.class_map_by_serial.insert(record.serial_id, record.name);
+                        }
+                    }
+                    println!("tag load class end = {}", snapshot.current_position.get());
                 }
-                // constant::TAG_STACK_FRAME => {
-                //     // TODO
-                //     snapshot.read_u8_array(length);
-                // }
-                // constant::TAG_STACK_TRACE => {
-                //     // TODO
-                //     snapshot.read_u8_array(length);
-                //
-                // }
-                // constant::TAG_HEAP_DUMP => {
-                //     snapshot.read_u8_array(length);
-                // }
-                // constant::TAG_HEAP_DUMP_SEGMENT => {
-                //     snapshot.read_u8_array(length);
-                // }
+                constant::TAG_STACK_FRAME => {
+                    println!("tag stack frame start = {}", snapshot.current_position.get());
+                    match parser::load_stack_frame(snapshot) {
+                        Err(err) => {
+                            // TODO
+                            println!("{}", err);
+                            break;
+                        }
+                        _ =>{}
+                    }
+                    println!("tag stack frame end = {}", snapshot.current_position.get());
+                }
+                constant::TAG_STACK_TRACE => {
+                    println!("tag stack trace start = {}", snapshot.current_position.get());
+                    match parser::load_stack_trace(snapshot) {
+                        Err(err) => {
+                            // TODO
+                            println!("{}", err);
+                            break;
+                        }
+                        _ =>{}
+                    }
+                    println!("tag stack trace end = {}", snapshot.current_position.get());
+                }
+                constant::TAG_HEAP_DUMP  | constant::TAG_HEAP_DUMP_SEGMENT=> {
+                    println!("tag heap dump start = {}", snapshot.current_position.get());
+                    match parser::load_heap(snapshot, length, result) {
+                        Err(err) => {
+                            // TODO
+                            println!("{}", err);
+                            break;
+                        }
+                        _ =>{}
+                    }
+                    println!("tag heap dump end = {}\n", snapshot.current_position.get());
+                }
                 _ => {
-                    // just skip
+                    // other just skip
                     match snapshot.read_u8_array(length) {
                         Err(err) => {
+                            println!("{}", err);
                             break;
                         }
                         _ => {}
@@ -122,9 +172,7 @@ impl<'hp: 'hr, 'hr> HprofParser<'hp> {
                 }
             };
         }
-        for (k, v) in &result.class_map_by_serial {
-            println!("class name = {}", *v);
-        }
+        println!("current postion = {}, max_size = {}", snapshot.current_position.get(), snapshot.max_size);
         Ok(true)
     }
 }

@@ -1,18 +1,18 @@
 /// record type
 pub const TAG_STRING: u8 = 0x01;
 pub const TAG_LOAD_CLASS: u8 = 0x02;
-pub const TAG_UNLOAD_CLASS: u8 = 0x03;
+// pub const TAG_UNLOAD_CLASS: u8 = 0x03;
 pub const TAG_STACK_FRAME: u8 = 0x04;
 pub const TAG_STACK_TRACE: u8 = 0x05;
-pub const TAG_ALLOC_SITES: u8 = 0x06;
-pub const TAG_HEAP_SUMMARY: u8 = 0x07;
-pub const TAG_START_THREAD: u8 = 0x0A;
-pub const TAG_END_THREAD: u8 = 0x0B;
+// pub const TAG_ALLOC_SITES: u8 = 0x06;
+// pub const TAG_HEAP_SUMMARY: u8 = 0x07;
+// pub const TAG_START_THREAD: u8 = 0x0A;
+// pub const TAG_END_THREAD: u8 = 0x0B;
 pub const TAG_HEAP_DUMP: u8 = 0x0C;
-pub const TAG_CPU_SAMPLES: u8 = 0x0D;
-pub const TAG_CONTROL_SETTINGS: u8 = 0x0E;
+// pub const TAG_CPU_SAMPLES: u8 = 0x0D;
+// pub const TAG_CONTROL_SETTINGS: u8 = 0x0E;
 pub const TAG_HEAP_DUMP_SEGMENT: u8 = 0x1C;
-pub const TAG_HEAP_DUMP_END: u8 = 0x2C;
+// pub const TAG_HEAP_DUMP_END: u8 = 0x2C;
 
 /// subRecord type
 pub const ROOT_JNI_GLOBAL: u8 = 0x01;

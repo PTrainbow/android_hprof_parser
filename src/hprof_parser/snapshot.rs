@@ -1,5 +1,5 @@
 use std::cell::Cell;
-use std::fmt;
+use std::{error, fmt};
 
 pub struct Snapshot<'a> {
     pub(crate) input: &'a [u8],
@@ -84,17 +84,6 @@ impl<'a> Snapshot<'a> {
         return Ok(result);
     }
 
-    // fn is_out_of_bounds(&self, size: usize) -> Result<bool, IndexOutOfBoundsError> {
-    //     if self.current_position.get() + size >= self.max_size {
-    //         let err = IndexOutOfBoundsError {
-    //             index: self.current_position.get() + size,
-    //             length: self.max_size,
-    //         };
-    //         return Err(err);
-    //     }
-    //     return Ok(true);
-    // }
-
     fn is_out_of_bounds(&self, size: usize) -> bool {
         return self.current_position.get() + size >= self.max_size;
     }
@@ -124,7 +113,7 @@ fn transform_u8_array_to_u64(b: &[u8]) -> u64 {
 }
 
 fn transform_u8_array_to_u16(b: &[u8]) -> u16 {
-    if b.len() != 4 {
+    if b.len() != 2 {
         panic!("input {:?} is not 2 bytes", b)
     }
     let b0: u16 = u16::from(b[0]) << 8;
@@ -136,6 +125,10 @@ fn transform_u8_array_to_u16(b: &[u8]) -> u16 {
 pub struct IndexOutOfBoundsError {
     length: usize,
     index: usize,
+}
+
+impl error::Error for IndexOutOfBoundsError {
+
 }
 
 impl fmt::Display for IndexOutOfBoundsError {
