@@ -1,5 +1,6 @@
 use std::cell::Cell;
 use std::{error, fmt};
+use std::fmt::Formatter;
 
 pub struct Snapshot<'a> {
     pub(crate) input: &'a [u8],
@@ -136,3 +137,49 @@ impl fmt::Display for IndexOutOfBoundsError {
         write!(f, "IndexOutOfBounds! length = {}, index = {}", self.length, self.index)
     }
 }
+
+#[derive(Debug)]
+pub struct UnknownTagError {
+    pub(crate) tag: u8,
+}
+
+impl error::Error for UnknownTagError {
+
+}
+
+impl fmt::Display for UnknownTagError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "UnknownSubTagError! tag = {}", self.tag)
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum HprofParseErr {
+    UnknownTagError(UnknownTagError),
+    IndexOutOfBoundsError(IndexOutOfBoundsError)
+}
+
+impl fmt::Display for HprofParseErr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            HprofParseErr::UnknownTagError(error) =>
+                write!(f, "{}", error),
+            HprofParseErr::IndexOutOfBoundsError(error) =>
+                write!(f, "{}", error),
+        }
+    }
+}
+
+impl From<IndexOutOfBoundsError> for HprofParseErr {
+    fn from(err: IndexOutOfBoundsError) -> Self {
+        HprofParseErr::IndexOutOfBoundsError(err)
+    }
+}
+
+impl From<UnknownTagError> for HprofParseErr {
+    fn from(err: UnknownTagError) -> Self {
+        HprofParseErr::UnknownTagError(err)
+    }
+}
+
+impl error::Error for HprofParseErr {}

@@ -1,9 +1,8 @@
 use std::cell::Cell;
 use std::collections::HashMap;
-use std::error;
 use std::fs::File;
 use memmap::Mmap;
-use crate::hprof_parser::snapshot::{IndexOutOfBoundsError, Snapshot};
+use crate::hprof_parser::snapshot::{HprofParseErr, Snapshot};
 
 mod constant;
 mod snapshot;
@@ -68,7 +67,7 @@ impl<'hp: 'hr, 'hr> HprofParser<'hp> {
 
     /// header format
     /// 18 byte | 4 byte(idSize) | 4 byte | 4 byte |
-    fn parse_header(&self) -> Result<HprofHeader, IndexOutOfBoundsError> {
+    fn parse_header(&self) -> Result<HprofHeader, HprofParseErr> {
         // read version, 18(version string) + 1 byte(NULL)
         let snapshot = self.snapshot;
         let version = String::from_utf8(snapshot.read_u8_array(constant::HPROF_HEADER_VERSION_SIZE as usize)?[0..18].to_vec()).unwrap();
@@ -84,7 +83,7 @@ impl<'hp: 'hr, 'hr> HprofParser<'hp> {
 
     /// record format
     /// 1 byte(tag) | 4 byte(ts) | 4 byte(length) | length byte(real content) |
-    fn parse_record(&self, result: &mut HprofResult<'hr>) -> Result<bool, Box<dyn error::Error>> {
+    fn parse_record(&self, result: &mut HprofResult<'hr>) -> Result<bool, HprofParseErr> {
         let snapshot = &self.snapshot;
         while snapshot.available() {
             // read tag

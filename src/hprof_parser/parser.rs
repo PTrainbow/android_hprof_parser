@@ -1,11 +1,10 @@
 use std::collections::HashMap;
-use std::{error, fmt};
-use crate::hprof_parser::snapshot::{IndexOutOfBoundsError, Snapshot};
+use crate::hprof_parser::snapshot::{HprofParseErr, Snapshot, UnknownTagError};
 use crate::hprof_parser::{ClassRecord, constant, HprofResult, StringRecord};
 
 /// ID | content
 /// id_size | content * size
-pub(crate) fn load_string<'a>(snapshot: &'a Snapshot, length: usize) -> Result<StringRecord<'a>, IndexOutOfBoundsError> {
+pub(crate) fn load_string<'a>(snapshot: &'a Snapshot, length: usize) -> Result<StringRecord<'a>, HprofParseErr> {
     let id = snapshot.read_bytes_by_id_size()?;
     let char_array = snapshot.read_u8_array(length - snapshot.id_size.get())?;
     let str = std::str::from_utf8(char_array).unwrap();
@@ -17,7 +16,7 @@ pub(crate) fn load_string<'a>(snapshot: &'a Snapshot, length: usize) -> Result<S
 
 /// number | object id | number | str id
 /// 4 byte |  id_size  | 4 byte | id_size
-pub(crate) fn load_class<'a>(snapshot: &'a Snapshot, map: &HashMap<usize, &'a str>) -> Result<ClassRecord<'a>, IndexOutOfBoundsError> {
+pub(crate) fn load_class<'a>(snapshot: &'a Snapshot, map: &HashMap<usize, &'a str>) -> Result<ClassRecord<'a>, HprofParseErr> {
     // read number
     let serial_id = snapshot.read_u32()? as usize;
     // read object id
@@ -43,7 +42,7 @@ pub(crate) fn load_class<'a>(snapshot: &'a Snapshot, map: &HashMap<usize, &'a st
 
 /// TODO parse
 /// ID | ID | ID | ID | 4 byte | 4 byte
-pub(crate) fn load_stack_frame(snapshot: &Snapshot) -> Result<bool, IndexOutOfBoundsError> {
+pub(crate) fn load_stack_frame(snapshot: &Snapshot) -> Result<bool, HprofParseErr> {
     snapshot.read_bytes_by_id_size()?;
     snapshot.read_bytes_by_id_size()?;
     snapshot.read_bytes_by_id_size()?;
@@ -55,7 +54,7 @@ pub(crate) fn load_stack_frame(snapshot: &Snapshot) -> Result<bool, IndexOutOfBo
 
 /// TODO parse
 /// 4byte | 4byte | 4byte(size) | ID * size
-pub(crate) fn load_stack_trace(snapshot: &Snapshot) -> Result<bool, IndexOutOfBoundsError> {
+pub(crate) fn load_stack_trace(snapshot: &Snapshot) -> Result<bool, HprofParseErr> {
     snapshot.read_u32()?;
     snapshot.read_u32()?;
     let size = snapshot.read_u32()?;
@@ -68,7 +67,7 @@ pub(crate) fn load_stack_trace(snapshot: &Snapshot) -> Result<bool, IndexOutOfBo
 /// TODO parse
 /// complex
 /// too many subtag
-pub(crate) fn load_heap<'a>(snapshot: &'a Snapshot, length: usize, _: &HprofResult) -> Result<bool, Box<dyn error::Error>> {
+pub(crate) fn load_heap<'a>(snapshot: &'a Snapshot, length: usize, _: &HprofResult) -> Result<bool, HprofParseErr> {
     let mut cursor = 0;
     while cursor < length {
         // read tag
@@ -142,7 +141,7 @@ pub(crate) fn load_heap<'a>(snapshot: &'a Snapshot, length: usize, _: &HprofResu
             }
             _ => {
                 println!("unknown tag = {}", tag);
-                return Err(Box::new(UnknownTagError {
+                return Err(HprofParseErr::UnknownTagError(UnknownTagError{
                     tag
                 }));
             }
@@ -151,13 +150,13 @@ pub(crate) fn load_heap<'a>(snapshot: &'a Snapshot, length: usize, _: &HprofResu
     return Ok(true);
 }
 
-fn load_basic_obj(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsError> {
+fn load_basic_obj(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     let _ = snapshot.read_bytes_by_id_size()?;
     // println!("load_basic_obj id = {}", root_id);
     return Ok(snapshot.id_size.get());
 }
 
-fn load_jni_local(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsError> {
+fn load_jni_local(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     let _ = snapshot.read_bytes_by_id_size()?;
     snapshot.read_u32()?;
     snapshot.read_u32()?;
@@ -165,7 +164,7 @@ fn load_jni_local(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsError> {
     return Ok(snapshot.id_size.get() + 4 * 2);
 }
 
-fn load_java_frame(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsError> {
+fn load_java_frame(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     let _ = snapshot.read_bytes_by_id_size()?;
     snapshot.read_u32()?;
     snapshot.read_u32()?;
@@ -173,21 +172,21 @@ fn load_java_frame(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsError> 
     return Ok(snapshot.id_size.get() + 4 * 2);
 }
 
-fn load_native_stack(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsError> {
+fn load_native_stack(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     let _ = snapshot.read_bytes_by_id_size()?;
     snapshot.read_u32()?;
     // println!("load_native_stack id = {}", root_id);
     return Ok(snapshot.id_size.get() + 4);
 }
 
-fn load_thread_block(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsError> {
+fn load_thread_block(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     let _ = snapshot.read_bytes_by_id_size()?;
     snapshot.read_u32()?;
     // println!("load_thread_block id = {}", root_id);
     return Ok(snapshot.id_size.get() + 4);
 }
 
-fn load_thread_obj(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsError> {
+fn load_thread_obj(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     let _ = snapshot.read_bytes_by_id_size()?;
     snapshot.read_u32()?;
     snapshot.read_u32()?;
@@ -197,7 +196,7 @@ fn load_thread_obj(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsError> 
 
 /// TODO parse
 /// complex
-fn load_class_dump(snapshot: &Snapshot) -> Result<usize, Box<dyn error::Error>> {
+fn load_class_dump(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     // let id = snapshot.read_bytes_by_id_size()?;
     snapshot.read_bytes_by_id_size()?;
     snapshot.read_u32()?;
@@ -255,7 +254,7 @@ fn load_class_dump(snapshot: &Snapshot) -> Result<usize, Box<dyn error::Error>> 
 
 /// TODO parse
 /// ID | 4byte | ID | remaining
-fn load_instance_dump(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsError> {
+fn load_instance_dump(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     // let root_id = snapshot.read_bytes_by_id_size()?;
     snapshot.read_bytes_by_id_size()?;
     snapshot.read_u32()?;
@@ -269,7 +268,7 @@ fn load_instance_dump(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsErro
 
 /// TODO parse
 /// ID | 4byte | 4byte(size) |ID | ID*size
-fn load_object_array(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsError> {
+fn load_object_array(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     // let root_id = snapshot.read_bytes_by_id_size()?;
     snapshot.read_bytes_by_id_size()?;
     // let stack_id = snapshot.read_u32()?;
@@ -285,7 +284,7 @@ fn load_object_array(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsError
 
 /// TODO parse
 /// ID | 4byte | 4byte(size) | 1byte(type) | size*type
-fn load_primitive_array(snapshot: &Snapshot) -> Result<usize, Box<dyn error::Error>> {
+fn load_primitive_array(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     // let root_id = snapshot.read_bytes_by_id_size()?;
     snapshot.read_bytes_by_id_size()?;
     // let stack_id = snapshot.read_u32()?;
@@ -301,7 +300,7 @@ fn load_primitive_array(snapshot: &Snapshot) -> Result<usize, Box<dyn error::Err
 
 /// TODO parse
 /// 4 byte | ID
-fn load_head_dump_info(snapshot: &Snapshot) -> Result<usize, IndexOutOfBoundsError> {
+fn load_head_dump_info(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     // let heap_id = snapshot.read_u32()?;
     snapshot.read_u32()?;
     // let heap_name_id = snapshot.read_bytes_by_id_size()?;
@@ -350,17 +349,3 @@ fn get_type_size(field_type: u8) -> Result<usize, UnknownTagError> {
     Ok(size)
 }
 
-#[derive(Debug)]
-pub struct UnknownTagError {
-    tag: u8,
-}
-
-impl error::Error for UnknownTagError {
-
-}
-
-impl fmt::Display for UnknownTagError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "UnknownSubTagError! tag = {}", self.tag)
-    }
-}
