@@ -1,6 +1,5 @@
+use crate::{Error, Result};
 use std::cell::Cell;
-use std::{error, fmt};
-use std::fmt::Formatter;
 
 pub struct Snapshot<'a> {
     pub(crate) input: &'a [u8],
@@ -14,9 +13,9 @@ impl<'a> Snapshot<'a> {
         return self.current_position.get() < self.max_size;
     }
 
-    pub fn read_u8(&self) -> Result<u8, IndexOutOfBoundsError> {
+    pub fn read_u8(&self) -> Result<u8> {
         if !self.available() {
-            return Err(IndexOutOfBoundsError {
+            return Err(Error::IndexOutOfBounds {
                 length: self.max_size,
                 index: self.current_position.get(),
             });
@@ -26,9 +25,9 @@ impl<'a> Snapshot<'a> {
         return Ok(result);
     }
 
-    pub fn read_u16(&self) -> Result<u16, IndexOutOfBoundsError> {
+    pub fn read_u16(&self) -> Result<u16> {
         if self.is_out_of_bounds(2) {
-            return Err(IndexOutOfBoundsError {
+            return Err(Error::IndexOutOfBounds {
                 length: self.max_size,
                 index: self.current_position.get() + 2,
             });
@@ -38,9 +37,9 @@ impl<'a> Snapshot<'a> {
         return Ok(transform_u8_array_to_u16(u8_array));
     }
 
-    pub fn read_u32(&self) -> Result<u32, IndexOutOfBoundsError> {
+    pub fn read_u32(&self) -> Result<u32> {
         if self.is_out_of_bounds(4) {
-            return Err(IndexOutOfBoundsError {
+            return Err(Error::IndexOutOfBounds {
                 length: self.max_size,
                 index: self.current_position.get() + 4,
             });
@@ -50,38 +49,37 @@ impl<'a> Snapshot<'a> {
         return Ok(transform_u8_array_to_u32(u8_array));
     }
 
-    pub fn read_bytes_by_id_size(&self) -> Result<usize, IndexOutOfBoundsError> {
+    pub fn read_bytes_by_id_size(&self) -> Result<usize> {
         if self.is_out_of_bounds(self.id_size.get()) {
-            return Err(IndexOutOfBoundsError {
+            return Err(Error::IndexOutOfBounds {
                 length: self.max_size,
                 index: self.current_position.get() + self.id_size.get(),
             });
         }
-        let u8_array = &self.input[self.current_position.get()..self.current_position.get() + self.id_size.get()];
-        self.current_position.set(self.current_position.get() + self.id_size.get());
+        let u8_array = &self.input
+            [self.current_position.get()..self.current_position.get() + self.id_size.get()];
+        self.current_position
+            .set(self.current_position.get() + self.id_size.get());
         let length = u8_array.len();
         return match length {
-            4 => {
-                Ok(transform_u8_array_to_u32(u8_array) as usize)
-            }
-            8 => {
-                Ok(transform_u8_array_to_u64(u8_array) as usize)
-            }
+            4 => Ok(transform_u8_array_to_u32(u8_array) as usize),
+            8 => Ok(transform_u8_array_to_u64(u8_array) as usize),
             _ => {
                 panic!("error id_size {}", self.id_size.get())
             }
         };
     }
 
-    pub fn read_u8_array(&self, size: usize) -> Result<&[u8], IndexOutOfBoundsError> {
+    pub fn read_u8_array(&self, size: usize) -> Result<&[u8]> {
         if self.is_out_of_bounds(size) {
-            return Err(IndexOutOfBoundsError {
+            return Err(Error::IndexOutOfBounds {
                 length: self.max_size,
                 index: self.current_position.get() + size,
             });
         }
         let result = &self.input[self.current_position.get()..self.current_position.get() + size];
-        self.current_position.set(self.current_position.get() + size);
+        self.current_position
+            .set(self.current_position.get() + size);
         return Ok(result);
     }
 
@@ -121,65 +119,3 @@ fn transform_u8_array_to_u16(b: &[u8]) -> u16 {
     let b1: u16 = u16::from(b[1]);
     return b0 + b1;
 }
-
-#[derive(Debug)]
-pub struct IndexOutOfBoundsError {
-    length: usize,
-    index: usize,
-}
-
-impl error::Error for IndexOutOfBoundsError {
-
-}
-
-impl fmt::Display for IndexOutOfBoundsError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "IndexOutOfBounds! length = {}, index = {}", self.length, self.index)
-    }
-}
-
-#[derive(Debug)]
-pub struct UnknownTagError {
-    pub(crate) tag: u8,
-}
-
-impl error::Error for UnknownTagError {
-
-}
-
-impl fmt::Display for UnknownTagError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "UnknownSubTagError! tag = {}", self.tag)
-    }
-}
-
-#[derive(Debug)]
-pub(crate) enum HprofParseErr {
-    UnknownTagError(UnknownTagError),
-    IndexOutOfBoundsError(IndexOutOfBoundsError)
-}
-
-impl fmt::Display for HprofParseErr {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            HprofParseErr::UnknownTagError(error) =>
-                write!(f, "{}", error),
-            HprofParseErr::IndexOutOfBoundsError(error) =>
-                write!(f, "{}", error),
-        }
-    }
-}
-
-impl From<IndexOutOfBoundsError> for HprofParseErr {
-    fn from(err: IndexOutOfBoundsError) -> Self {
-        HprofParseErr::IndexOutOfBoundsError(err)
-    }
-}
-
-impl From<UnknownTagError> for HprofParseErr {
-    fn from(err: UnknownTagError) -> Self {
-        HprofParseErr::UnknownTagError(err)
-    }
-}
-
-impl error::Error for HprofParseErr {}

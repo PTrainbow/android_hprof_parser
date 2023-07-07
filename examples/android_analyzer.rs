@@ -1,13 +1,9 @@
-use std::fs::File;
 use android_hprof::hprof_parser::HprofParser;
+use anyhow::Result;
+use std::fs::File;
 
-fn main() {
-    let file = File::open("resource/test.hprof");
-    let file = match file {
-        Ok(f) => f,
-        Err(error) => {
-            panic!("Problem creating the file: {:?}", error);
-        }
-    };
-    HprofParser::parse(&file);
+fn main() -> Result<()> {
+    let file = File::open("resource/test.hprof")?;
+    let _ = HprofParser::parse(&file);
+    Ok(())
 }
