@@ -1,6 +1,6 @@
 use crate::hprof_parser::constant;
 use crate::{Error, Result};
-use byteorder::{ByteOrder, ReadBytesExt, BE, LE};
+use byteorder::{ByteOrder, ReadBytesExt, BE};
 use std::cell::{Cell, RefCell};
 use std::ffi::CStr;
 use std::fmt::{Debug, Formatter};
@@ -99,7 +99,7 @@ impl<'a> HprofRead for Slice<'a> {
     fn read_u16(&self) -> Result<u16> {
         self.check(2)?;
         let n = self.n.get();
-        let i = (&self.buf[n..]).read_u16::<LE>()?;
+        let i = (&self.buf[n..]).read_u16::<BE>()?;
         self.n.set(n + 2);
         Ok(i)
     }
@@ -115,7 +115,7 @@ impl<'a> HprofRead for Slice<'a> {
     fn read_u64(&self) -> Result<u64> {
         self.check(8)?;
         let n = self.n.get();
-        let i = (&self.buf[n..]).read_u64::<LE>()?;
+        let i = (&self.buf[n..]).read_u64::<BE>()?;
         self.n.set(n + 8);
         Ok(i)
     }
@@ -124,7 +124,7 @@ impl<'a> HprofRead for Slice<'a> {
         let id_size = self.id_size();
         self.check(id_size)?;
         let n = self.n.get();
-        let id = (&self.buf[n..]).read_uint::<LE>(id_size)?;
+        let id = (&self.buf[n..]).read_uint::<BE>(id_size)?;
         self.n.set(n + id_size);
         Ok(id)
     }
@@ -152,7 +152,7 @@ impl<'a> HprofRead for Slice<'a> {
     fn read_f32(&self) -> Result<f32> {
         self.check(4)?;
         let n = self.n.get();
-        let v = (&self.buf[n..]).read_f32::<LE>()?;
+        let v = (&self.buf[n..]).read_f32::<BE>()?;
         self.n.set(n + 4);
         Ok(v)
     }
@@ -160,7 +160,7 @@ impl<'a> HprofRead for Slice<'a> {
     fn read_f64(&self) -> Result<f64> {
         self.check(8)?;
         let n = self.n.get();
-        let v = (&self.buf[n..]).read_f64::<LE>()?;
+        let v = (&self.buf[n..]).read_f64::<BE>()?;
         self.n.set(n + 8);
         Ok(v)
     }
