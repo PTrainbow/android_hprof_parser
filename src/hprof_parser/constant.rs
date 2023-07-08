@@ -1,7 +1,7 @@
 /// record type
 pub const TAG_STRING: u8 = 0x01;
 pub const TAG_LOAD_CLASS: u8 = 0x02;
-// pub const TAG_UNLOAD_CLASS: u8 = 0x03;
+pub const TAG_UNLOAD_CLASS: u8 = 0x03;
 pub const TAG_STACK_FRAME: u8 = 0x04;
 pub const TAG_STACK_TRACE: u8 = 0x05;
 // pub const TAG_ALLOC_SITES: u8 = 0x06;
