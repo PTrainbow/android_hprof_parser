@@ -317,6 +317,7 @@ impl<'a> Snapshot<'a> {
             count += self.parse_record()?;
         }
         assert_eq!(count, total);
+        assert_eq!(self.remain(), 0);
 
         Ok(())
     }
