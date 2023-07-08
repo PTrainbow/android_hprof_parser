@@ -424,6 +424,10 @@ impl<'a> Snapshot<'a> {
                 let class_loader_object_id = self.read_id()?;
                 let signers_object_id = self.read_id()?;
                 let protection_domain_object_id = self.read_id()?;
+
+                // 2 reserved ID
+                self.skip(self.id_size() * 2)?;
+
                 let instance_size = self.read_u32()?;
 
                 let count: usize = self.read_u16()? as _;
