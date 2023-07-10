@@ -1,73 +1,14 @@
+use crate::hprof_parser::snapshot::Snapshot;
+use crate::hprof_parser::{constant, ClassRecord, HprofResult, StringRecord};
+use crate::{Error, Result};
 use std::collections::HashMap;
-use crate::hprof_parser::snapshot::{HprofParseErr, Snapshot, UnknownTagError};
-use crate::hprof_parser::{ClassRecord, constant, HprofResult, StringRecord};
+use std::str;
 
-/// ID | content
-/// id_size | content * size
-pub(crate) fn load_string<'a>(snapshot: &'a Snapshot, length: usize) -> Result<StringRecord<'a>, HprofParseErr> {
-    let id = snapshot.read_bytes_by_id_size()?;
-    let char_array = snapshot.read_u8_array(length - snapshot.id_size.get())?;
-    let str = std::str::from_utf8(char_array).unwrap();
-    return Ok(StringRecord {
-        id,
-        content: str,
-    });
-}
-
-/// number | object id | number | str id
-/// 4 byte |  id_size  | 4 byte | id_size
-pub(crate) fn load_class<'a>(snapshot: &'a Snapshot, map: &HashMap<usize, &'a str>) -> Result<ClassRecord<'a>, HprofParseErr> {
-    // read number
-    let serial_id = snapshot.read_u32()? as usize;
-    // read object id
-    let class_id = snapshot.read_bytes_by_id_size()?;
-    // read number
-    snapshot.read_u32()?;
-    // read str id
-    let str_id = snapshot.read_bytes_by_id_size()?;
-    let name = match map.get(&str_id) {
-        None => {
-            "unknown"
-        }
-        Some(record) => {
-            *record
-        }
-    };
-    return Ok(ClassRecord {
-        class_id,
-        serial_id,
-        name,
-    });
-}
-
-/// TODO parse
-/// ID | ID | ID | ID | 4 byte | 4 byte
-pub(crate) fn load_stack_frame(snapshot: &Snapshot) -> Result<bool, HprofParseErr> {
-    snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
-    snapshot.read_u32()?;
-    snapshot.read_u32()?;
-    return Ok(true);
-}
-
-/// TODO parse
-/// 4byte | 4byte | 4byte(size) | ID * size
-pub(crate) fn load_stack_trace(snapshot: &Snapshot) -> Result<bool, HprofParseErr> {
-    snapshot.read_u32()?;
-    snapshot.read_u32()?;
-    let size = snapshot.read_u32()?;
-    for _ in 0..size {
-        snapshot.read_bytes_by_id_size()?;
-    }
-    return Ok(true);
-}
 
 /// TODO parse
 /// complex
 /// too many subtag
-pub(crate) fn load_heap<'a>(snapshot: &'a Snapshot, length: usize, _: &HprofResult) -> Result<bool, HprofParseErr> {
+pub(crate) fn load_heap(snapshot: &mut Snapshot, length: usize) -> Result<bool> {
     let mut cursor = 0;
     while cursor < length {
         // read tag
@@ -79,8 +20,8 @@ pub(crate) fn load_heap<'a>(snapshot: &'a Snapshot, length: usize, _: &HprofResu
             }
             constant::ROOT_JNI_GLOBAL => {
                 cursor += load_basic_obj(snapshot)?;
-                snapshot.read_bytes_by_id_size()?;
-                cursor += snapshot.id_size.get();
+                snapshot.read_id()?;
+                cursor += snapshot.id_size();
             }
             constant::ROOT_JNI_LOCAL => {
                 cursor += load_jni_local(snapshot)?;
@@ -140,77 +81,74 @@ pub(crate) fn load_heap<'a>(snapshot: &'a Snapshot, length: usize, _: &HprofResu
                 cursor += load_basic_obj(snapshot)?;
             }
             _ => {
-                println!("unknown tag = {}", tag);
-                return Err(HprofParseErr::UnknownTagError(UnknownTagError{
-                    tag
-                }));
+                return Err(Error::UnknownTag(tag));
             }
         }
     }
     return Ok(true);
 }
 
-fn load_basic_obj(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
-    let _ = snapshot.read_bytes_by_id_size()?;
+fn load_basic_obj(snapshot: &mut Snapshot) -> Result<usize> {
+    let _ = snapshot.read_id()?;
     // println!("load_basic_obj id = {}", root_id);
-    return Ok(snapshot.id_size.get());
+    return Ok(snapshot.id_size());
 }
 
-fn load_jni_local(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
-    let _ = snapshot.read_bytes_by_id_size()?;
+fn load_jni_local(snapshot: &mut Snapshot) -> Result<usize> {
+    let _ = snapshot.read_id()?;
     snapshot.read_u32()?;
     snapshot.read_u32()?;
     // println!("load_jni_local id = {}", root_id);
-    return Ok(snapshot.id_size.get() + 4 * 2);
+    return Ok(snapshot.id_size() + 4 * 2);
 }
 
-fn load_java_frame(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
-    let _ = snapshot.read_bytes_by_id_size()?;
+fn load_java_frame(snapshot: &mut Snapshot) -> Result<usize> {
+    let _ = snapshot.read_id()?;
     snapshot.read_u32()?;
     snapshot.read_u32()?;
     // println!("load_java_frame id = {}", root_id);
-    return Ok(snapshot.id_size.get() + 4 * 2);
+    return Ok(snapshot.id_size() + 4 * 2);
 }
 
-fn load_native_stack(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
-    let _ = snapshot.read_bytes_by_id_size()?;
+fn load_native_stack(snapshot: &mut Snapshot) -> Result<usize> {
+    let _ = snapshot.read_id()?;
     snapshot.read_u32()?;
     // println!("load_native_stack id = {}", root_id);
-    return Ok(snapshot.id_size.get() + 4);
+    return Ok(snapshot.id_size() + 4);
 }
 
-fn load_thread_block(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
-    let _ = snapshot.read_bytes_by_id_size()?;
+fn load_thread_block(snapshot: &mut Snapshot) -> Result<usize> {
+    let _ = snapshot.read_id()?;
     snapshot.read_u32()?;
     // println!("load_thread_block id = {}", root_id);
-    return Ok(snapshot.id_size.get() + 4);
+    return Ok(snapshot.id_size() + 4);
 }
 
-fn load_thread_obj(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
-    let _ = snapshot.read_bytes_by_id_size()?;
+fn load_thread_obj(snapshot: &mut Snapshot) -> Result<usize> {
+    let _ = snapshot.read_id()?;
     snapshot.read_u32()?;
     snapshot.read_u32()?;
     // println!("load_java_frame id = {}", root_id);
-    return Ok(snapshot.id_size.get() + 4 * 2);
+    return Ok(snapshot.id_size() + 4 * 2);
 }
 
 /// TODO parse
 /// complex
-fn load_class_dump(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
+fn load_class_dump(snapshot: &mut Snapshot) -> Result<usize> {
     // let id = snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
+    snapshot.read_id()?;
     snapshot.read_u32()?;
     // let class_id = snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
+    snapshot.read_id()?;
     // let classloader_id = snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
+    snapshot.read_id()?;
+    snapshot.read_id()?;
+    snapshot.read_id()?;
+    snapshot.read_id()?;
+    snapshot.read_id()?;
     // let instance_size = snapshot.read_u32()?;
     snapshot.read_u32()?;
-    let mut bytes_read = (7 * snapshot.id_size.get()) + 4 + 4;
+    let mut bytes_read = (7 * snapshot.id_size()) + 4 + 4;
     // constant pool
     let constant_pool_size = snapshot.read_u16()?;
     bytes_read += 2;
@@ -227,8 +165,8 @@ fn load_class_dump(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     let static_field_size = snapshot.read_u16()?;
     bytes_read += 2;
     for _i in 0..static_field_size {
-        snapshot.read_bytes_by_id_size()?;
-        bytes_read += snapshot.id_size.get();
+        snapshot.read_id()?;
+        bytes_read += snapshot.id_size();
         let field_type = snapshot.read_u8()?;
         bytes_read += 1;
         let size = get_type_size(field_type)?;
@@ -239,8 +177,8 @@ fn load_class_dump(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     let instance_field_size = snapshot.read_u16()?;
     bytes_read += 2;
     for _i in 0..instance_field_size {
-        snapshot.read_bytes_by_id_size()?;
-        bytes_read += snapshot.id_size.get();
+        snapshot.read_id()?;
+        bytes_read += snapshot.id_size();
         // let field_type = snapshot.read_u8()?;
         snapshot.read_u8()?;
         bytes_read += 1;
@@ -254,39 +192,39 @@ fn load_class_dump(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
 
 /// TODO parse
 /// ID | 4byte | ID | remaining
-fn load_instance_dump(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
+fn load_instance_dump(snapshot: &mut Snapshot) -> Result<usize> {
     // let root_id = snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
+    snapshot.read_id()?;
     snapshot.read_u32()?;
     // let stack_id = snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
+    snapshot.read_id()?;
     let remaining = snapshot.read_u32()? as usize;
     snapshot.read_u8_array(remaining)?;
     // println!("load_instance_dump id = {}", root_id);
-    return Ok(snapshot.id_size.get() * 2 + 4 * 2 + remaining);
+    return Ok(snapshot.id_size() * 2 + 4 * 2 + remaining);
 }
 
 /// TODO parse
 /// ID | 4byte | 4byte(size) |ID | ID*size
-fn load_object_array(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
+fn load_object_array(snapshot: &mut Snapshot) -> Result<usize> {
     // let root_id = snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
+    snapshot.read_id()?;
     // let stack_id = snapshot.read_u32()?;
     snapshot.read_u32()?;
     let size = snapshot.read_u32()? as usize;
     // let class_id = snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
+    snapshot.read_id()?;
     // println!("load_object_array id = {}", root_id);
-    let remaining = snapshot.id_size.get() * size;
+    let remaining = snapshot.id_size() * size;
     snapshot.read_u8_array(remaining)?;
-    return Ok(snapshot.id_size.get() * 2 + 4 * 2 + remaining);
+    return Ok(snapshot.id_size() * 2 + 4 * 2 + remaining);
 }
 
 /// TODO parse
 /// ID | 4byte | 4byte(size) | 1byte(type) | size*type
-fn load_primitive_array(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
+fn load_primitive_array(snapshot: &mut Snapshot) -> Result<usize> {
     // let root_id = snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
+    snapshot.read_id()?;
     // let stack_id = snapshot.read_u32()?;
     snapshot.read_u32()?;
     let size = snapshot.read_u32()? as usize;
@@ -295,21 +233,21 @@ fn load_primitive_array(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
     let remaining = size * type_size;
     snapshot.read_u8_array(remaining)?;
     // println!("load_primitive_array id = {}", root_id);
-    return Ok(snapshot.id_size.get() + 4 * 2 + 1 + remaining);
+    return Ok(snapshot.id_size() + 4 * 2 + 1 + remaining);
 }
 
 /// TODO parse
 /// 4 byte | ID
-fn load_head_dump_info(snapshot: &Snapshot) -> Result<usize, HprofParseErr> {
+fn load_head_dump_info(snapshot: &mut Snapshot) -> Result<usize> {
     // let heap_id = snapshot.read_u32()?;
     snapshot.read_u32()?;
     // let heap_name_id = snapshot.read_bytes_by_id_size()?;
-    snapshot.read_bytes_by_id_size()?;
+    snapshot.read_id()?;
     // println!("load_head_dump_info id = {}", heap_id);
-    return Ok(snapshot.id_size.get() + 4);
+    return Ok(snapshot.id_size() + 4);
 }
 
-fn get_type_size(field_type: u8) -> Result<usize, UnknownTagError> {
+fn get_type_size(field_type: u8) -> Result<usize> {
     let mut size: usize = 0;
     match field_type {
         constant::OBJECT => {
@@ -340,12 +278,8 @@ fn get_type_size(field_type: u8) -> Result<usize, UnknownTagError> {
             size += 8;
         }
         _ => {
-            println!("unknown filed type = {}", field_type);
-            return Err(UnknownTagError {
-                tag: field_type
-            })
+            return Err(Error::UnknownTag(field_type));
         }
     }
     Ok(size)
 }
-

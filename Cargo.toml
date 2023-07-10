@@ -7,7 +7,12 @@ edition = "2021"
 
 [dependencies]
 memmap = "0.7.0"
+byteorder = "1"
+thiserror = "1"
+chrono = "0.4"
 
+[dev-dependencies]
+anyhow = "1"
 
 [[example]]
 name = "android_analyzer"

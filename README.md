@@ -1,6 +1,6 @@
 # Android Hprof Parser
 
-[hprof file format](https://hg.openjdk.org/jdk6/jdk6/jdk/raw-file/tip/src/share/demo/jvmti/hprof/manual.html)
+[hprof file format](https://hg.openjdk.org/jdk8/jdk8/jdk/raw-file/tip/src/share/demo/jvmti/hprof/manual.html)
 
 [android studio perflib](https://cs.android.com/android-studio/platform/tools/base/+/mirror-goog-studio-main:perflib/src/main/java/com/android/tools/perflib/heap/HprofParser.java;l=29?q=HprofParser&sq=)
 
